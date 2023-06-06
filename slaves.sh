@@ -7,6 +7,8 @@
 # * Pengunduhan Maviskeleton yang terdapat di Github
 # * Pembuatan "Folder" Tertentu
 
+cd $HOME
+
 # Welcome Banner
 clear
 cat << EOM
@@ -55,12 +57,14 @@ echo -e "\n"
 NVM_URL="https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh"
 ANDROID_STUDIO_URL="https://redirector.gvt1.com/edgedl/android/studio/ide-zips/2022.2.1.20/android-studio-2022.2.1.20-linux.tar.gz"
 ANDROID_PATH_STR="export ANDROID_HOME=\$HOME/Android/Sdk"
-NEW_PATH_STR="export \$PATH:\$ANDROID_HOME/platform-tools"
+NEW_PATH_STR="export PATH=\$PATH:\$ANDROID_HOME/platform-tools"
 SDKMAN_URL="https://get.sdkman.io"
 START_SH_CONTENT=$(
 cat << EOM
 #!/bin/bash
 source $HOME/.nvm/nvm.sh
+export ANDROID_HOME=\$HOME/Android/Sdk
+export PATH=\$PATH:\$ANDROID_HOME/platform-tools
 npm run start
 EOM
 )
@@ -73,7 +77,7 @@ After=network.target
 [Install]
 WantedBy=multi-user.target
 [Service]
-ExecStartPre=-=$HOME/Android/Sdk/platform-tools/adb start-server
+ExecStartPre=-$HOME/Android/Sdk/platform-tools/adb start-server
 ExecStart=$HOME/.apps/maviskeleton/start.sh
 WorkingDirectory=$HOME/.apps/maviskeleton
 LimitNOFILE=4096
@@ -106,7 +110,7 @@ echo "$sudoKS" | sudo -S usermod -aG dialout "$USER"
 # --------------
 # Pemasangan NVM
 # --------------
-if [ ! -d "$HOME/.nvm" ]; then 
+if [ ! -f "$HOME/.nvm/nvm.sh" ]; then 
   echo "Installing NVM"
   echo "========================="
 
@@ -179,8 +183,7 @@ if [ ! -d "/usr/local/android-studio" ]; then
   wget $ANDROID_STUDIO_URL
 
   # Ekstrak Android Studio ke /usr/local/
-  tar -xfv ./android-studio-2022.2.1.20-linux.tar.gz
-  echo "$sudoKS" | sudo -S cp ./android-studio /usr/local/
+  echo "$sudoKS" | sudo -S tar -xzfv "$HOME/android-studio-2022.2.1.20-linux.tar.gz" -C /usr/local
 
   # Memasukan Env baru ke .bashrc
   echo -e "\n"
