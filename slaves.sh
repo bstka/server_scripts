@@ -294,4 +294,6 @@ if [ ! -d "$HOME/.apps/maviskeleton" ]; then
   chmod +x start.sh
 
   systemctl enable --user maviskeleton.service
+  systemctl enable --user appium-start.service
+  systemctl enable --user avd-start.service
 fi
