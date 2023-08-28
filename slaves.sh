@@ -7,6 +7,8 @@
 # * Pengunduhan Maviskeleton yang terdapat di Github
 # * Pembuatan "Folder" Tertentu
 
+cd $HOME
+
 # Welcome Banner
 clear
 cat << EOM
@@ -55,13 +57,25 @@ echo -e "\n"
 NVM_URL="https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh"
 ANDROID_STUDIO_URL="https://redirector.gvt1.com/edgedl/android/studio/ide-zips/2022.2.1.20/android-studio-2022.2.1.20-linux.tar.gz"
 ANDROID_PATH_STR="export ANDROID_HOME=\$HOME/Android/Sdk"
-NEW_PATH_STR="export \$PATH:\$ANDROID_HOME/platform-tools"
+NEW_PATH_STR="export PATH=\$PATH:\$ANDROID_HOME/platform-tools"
 SDKMAN_URL="https://get.sdkman.io"
 START_SH_CONTENT=$(
 cat << EOM
 #!/bin/bash
 source $HOME/.nvm/nvm.sh
+export ANDROID_HOME=\$HOME/Android/Sdk
+export PATH=\$PATH:\$ANDROID_HOME/platform-tools
 npm run start
+EOM
+)
+
+START_APPIUM_SH_CONTENT=$(
+cat << EOM
+#!/bin/bash
+source $HOME/.nvm/nvm.sh
+export ANDROID_HOME=\$HOME/Android/Sdk
+export PATH=\$PATH:\$ANDROID_HOME/platform-tools
+appium
 EOM
 )
 
@@ -73,13 +87,47 @@ After=network.target
 [Install]
 WantedBy=multi-user.target
 [Service]
-ExecStartPre=-=$HOME/Android/Sdk/platform-tools/adb start-server
+ExecStartPre=-$HOME/Android/Sdk/platform-tools/adb start-server
 ExecStart=$HOME/.apps/maviskeleton/start.sh
 WorkingDirectory=$HOME/.apps/maviskeleton
 LimitNOFILE=4096
 IgnoreSIGPIPE=false
 KillMode=control-group
-User=$USER
+Restart=always
+EOM
+)
+
+APPIUM_SERVICE_STR=$(
+cat << EOM
+[Unit]
+Description=Appium Services
+After=network.target
+[Install]
+WantedBy=multi-user.target
+[Service]
+ExecStartPre=-$HOME/Android/Sdk/platform-tools/adb start-server
+ExecStart=$HOME/.apps/maviskeleton/appium-start.sh
+WorkingDirectory=$HOME/.apps/maviskeleton
+LimitNOFILE=4096
+IgnoreSIGPIPE=false
+KillMode=control-group
+Restart=always
+EOM
+)
+
+ANDROID_SERVICE_STR=$(
+cat << EOM
+[Unit]
+Description=Android AVD Services
+After=graphical.target
+[Install]
+WantedBy=multi-user.target
+[Service]
+ExecStartPre=-$HOME/Android/Sdk/platform-tools/adb start-server
+ExecStart=$HOME/Android/Sdk/emulator/emulator -avd Pixel_4_XL_API_27
+LimitNOFILE=4096
+IgnoreSIGPIPE=false
+KillMode=control-group
 Restart=always
 EOM
 )
@@ -103,36 +151,20 @@ echo "$sudoKS" | sudo -S apt purge brltty -y
 # Menambahkan user ke group dialout
 echo "$sudoKS" | sudo -S usermod -aG dialout "$USER"
 
-# --------------
-# Pemasangan NVM
-# --------------
-if [ ! -d "$HOME/.nvm" ]; then 
-  echo "Installing NVM"
-  echo "========================="
-
-  curl -o- $NVM_URL | bash
-  
-  # "Sourcing" NVM
-  source "$HOME"/.nvm/nvm.sh
-  
-  # Pemasangan Node.js LTS
-  echo -e "\n"
-  echo "Installing Node.JS LTS"
-  echo "========================="
-  nvm install --lts
-  
-  
-  # Pemasangan Appium & appium-doctor
-  echo -e "\n"
-  echo "Installing Appium"
-  echo "========================="
-  npm install @appium/doctor appium -g
-fi
+echo "$sudoKS" | sudo -S apt-get update
 
 # --------------
 # Pemasangan Java JRE & Java JDK
 # Dan keperluan lainya
 # --------------
+if ! command -v git > /dev/null ; then
+  echo "Installing gil"
+  echo "========================="
+
+  echo "$sudoKS" | sudo -S apt install git
+  echo -e "\n"
+fi
+
 if ! command -v unzip > /dev/null ; then
   echo "Installing Unzip"
   echo "========================="
@@ -157,6 +189,33 @@ if ! command -v curl > /dev/null; then
   echo -e "\n"
 fi
 
+# --------------
+# Pemasangan NVM
+# --------------
+if [ ! -f "$HOME/.nvm/nvm.sh" ]; then 
+  echo "Installing NVM"
+  echo "========================="
+
+  curl -o- $NVM_URL | bash
+  
+  # "Sourcing" NVM
+  source "$HOME"/.nvm/nvm.sh
+  
+  # Pemasangan Node.js LTS
+  echo -e "\n"
+  echo "Installing Node.JS LTS"
+  echo "========================="
+  nvm install --lts
+  
+  
+  # Pemasangan Appium & appium-doctor
+  echo -e "\n"
+  echo "Installing Appium"
+  echo "========================="
+  npm install @appium/doctor appium@1.22 -g
+fi
+
+
 if [ ! -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
   echo "Installing SDKMAN"
   echo "========================="
@@ -179,8 +238,7 @@ if [ ! -d "/usr/local/android-studio" ]; then
   wget $ANDROID_STUDIO_URL
 
   # Ekstrak Android Studio ke /usr/local/
-  tar -xfv ./android-studio-2022.2.1.20-linux.tar.gz
-  echo "$sudoKS" | sudo -S cp ./android-studio /usr/local/
+  echo "$sudoKS" | sudo -S tar -xzf "$HOME/android-studio-2022.2.1.20-linux.tar.gz" -C /usr/local
 
   # Memasukan Env baru ke .bashrc
   echo -e "\n"
@@ -216,13 +274,24 @@ if [ ! -d "$HOME/.apps/maviskeleton" ]; then
   echo "$MAVISKELETON_ENV_STR" > .env
 
   # membuat file service
-  echo "$sudoKS" | sudo -S touch /etc/systemd/system/maviskeleton.service
-  echo "$sudoKS" | sudo -S echo "$MAVISKELETON_SERVICE_STR" | tee /etc/systemd/system/maviskeleton.service
+  touch "$HOME"/.config/systemd/user/maviskeleton.service
+  echo "$MAVISKELETON_SERVICE_STR" >> "$HOME"/.config/systemd/user/maviskeleton.service
+
+  touch "$HOME"/.config/systemd/user/appium-start.service
+  echo "$APPIUM_SERVICE_STR" >> "$HOME"/.config/systemd/user/appium-start.service
+
+  touch "$HOME"/.config/systemd/user/avd-start.service
+  echo "$ANDROID_SERVICE_STR" >> "$HOME"/.config/systemd/user/avd-start.service
 
   # Membuat file start.sh
   touch start.sh
   echo "$START_SH_CONTENT" > start.sh
 
+  touch appium-start.sh
+  echo "$START_APPIUM_SH_CONTENT" > appium-start.sh
+
   # Buat start.sh dapat dijalankan
   chmod +x start.sh
+
+  systemctl enable --user maviskeleton.service
 fi
